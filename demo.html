@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>procedural demo</title>
+</head>
+<body>
+<script src="https://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="index.js"></script>
+<script>
+var universe = procedural('universe');
+universe
+  .withInput('seed')
+  // Create a "hash" value with the seed hashed in.
+  .withHashFrom('global.baseHash', 'seed')
+  // Systems can be found on a 2D plane (a space map!).
+  .generates('system')
+    .withInputs('x', 'y')
+    .withHashFrom('universe.hash', 'x', 'y')
+    .withValue('numPlanets', function (system) {
+      // Calculate an arbitrary (but deterministic) number of planets.
+      return Math.max(Math.round(Math.sin(system.hash / Math.PI) * 10), 0);
+    })
+    .generates('planet')
+      .withInput('number', function (planet, number) {
+        return number > 0 && number <= planet.system.numPlanets;
+      })
+      .withHashFrom('system.hash', 'number')
+      .withValue('temperature', function (planet) {
+        return Math.round(Math.cos(planet.hash / Math.PI) * 1000);
+      })
+      .withValue('supportsLife', function (planet) {
+        return planet.temperature > 0 && planet.temperature < 100 ? 'MAYBE!' : 'nah';
+      });
+
+
+universe.system.planet.generates('biomes')
+  .withValue('list', function (biomes) {
+    var temp = biomes.planet.temperature;
+    if (temp < 0) {
+      return ['arctic'];
+    } else if (temp < 50) {
+      return ['tundra', 'ocean'];
+    } else if (temp < 100) {
+      return ['jungle', 'ocean'];
+    } else if (temp < 250) {
+      return ['desert'];
+    } else if (temp < 500) {
+      return ['fiery'];
+    } else {
+      return ['molten'];
+    }
+  })
+  .generates('biome')
+    .withInput('index', function (biome, index) {
+      return index >= 0 && index < biome.biomes.list.length;
+    })
+    .withValue('name', function (biome) {
+      return biome.biomes.list[biome.index];
+    });
+
+
+var system = universe('My Little Universe').system(123, 456);
+for (var i = 1; i <= system.numPlanets; i++) {
+  var planet = system.planet(i);
+
+  $('<h2>').text('planet #' + planet.number).appendTo('body');
+  $('<p>').append($('<code>').text(planet.toString())).appendTo('body');
+  $('<p>').text('temperature: ' + planet.temperature + '°').appendTo('body');
+  $('<p>').text('main biome: ' + planet.biomes().biome(0).name).appendTo('body');
+  $('<p>').text('life? ' + planet.supportsLife).appendTo('body');
+}
+</script>
+</body>
+</html>

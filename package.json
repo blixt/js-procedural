@@ -1,0 +1,19 @@
+{
+  "name": "procedural",
+  "version": "0.1.0",
+  "description": "Library for defining procedural functions.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blixt/js-procedural.git"
+  },
+  "author": "Blixt <me@blixt.org>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/blixt/js-procedural/issues"
+  },
+  "homepage": "https://github.com/blixt/js-procedural"
+}
