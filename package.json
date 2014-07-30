@@ -1,6 +1,6 @@
 {
   "name": "procedural",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Library for defining procedural functions.",
   "main": "index.js",
   "scripts": {
