@@ -1,70 +1,51 @@
-// TODO:
-// - Store parameters + computed values in same list to preserve order
-// - perlin noise
-// - allow for specifying what parameters affect the hash
+var murmur3 = require('./lib/murmur3');
+var random = require('./lib/random');
 
+// Poor man's enum.
+var PARAMETER = {}, COMPUTED = {};
 
-/**
- * Creates a pseudo-random value generator. The seed must be an integer.
- *
- * Uses an optimized version of the Park-Miller PRNG.
- * http://www.firstpr.com.au/dsp/rand31/
- */
-function Random(seed) {
-  this._seed = seed % 2147483647;
-  if (this._seed <= 0) this._seed += 2147483646;
-}
+module.exports = function procedural(name, parent) {
+  var values = [], valuesMap = {hash: null};
+  var doNotHash = [];
+  var parameterCount = 0;
 
-/**
- * Returns a pseudo-random value between 1 and 2^32 - 2.
- */
-Random.prototype.next = function () {
-  return this._seed = this._seed * 16807 % 2147483647;
-};
-
-/**
- * Returns a pseudo-random floating point number in range [0, 1), or a custom
- * range, if specified. The lower bound is inclusive while the upper bound is
- * exclusive.
- */
-Random.prototype.nextFloat = function (opt_minOrMax, opt_max) {
-  // We know that result of next() will be 1 to 2147483646 (inclusive).
-  var value = (this.next() - 1) / 2147483646;
-
-  var min, max;
-  if (typeof opt_max == 'number') {
-    min = opt_minOrMax;
-    max = opt_max;
-  } else if (typeof opt_minOrMax == 'number') {
-    min = 0;
-    max = opt_minOrMax;
-  } else {
-    return value;
+  // Utility functions that can be passed for use outside this function.
+  function getName() {
+    return name;
   }
 
-  return min + value * (max - min);
-};
+  function getValues(opt_type) {
+    var names = [];
+    for (var i = 0; i < values.length; i++) {
+      if (opt_type && values[i].type != opt_type) continue;
+      names.push(values[i].name);
+    }
+    return names;
+  }
 
-/**
- * Returns a pseudo-random integer in the specified range. The lower bound is
- * inclusive while the upper bound is exclusive.
- */
-Random.prototype.nextInt = function (minOrMax, opt_max) {
-  return Math.floor(this.nextFloat(minOrMax, opt_max));
-};
+  function getParameters() {
+    return getValues(PARAMETER);
+  }
 
-function procedural(name, parent) {
-  var params = [], values = [];
+  function getProvides() {
+    return getValues(COMPUTED);
+  }
 
+  // The constructor for a single instance of this procedural function.
   function ProceduralInstance(parentInstance) {
     if (parentInstance) {
       this[parentInstance.getName()] = parentInstance;
     } else if (parent) {
-      console.warn('Creating detached instance (expected parent ' + parent + ')');
+      console.warn('Creating detached ' + name + ' instance (expected parent ' + parent + ')');
     }
   }
 
   ProceduralInstance.prototype = {
+    getName: getName,
+    getParameters: getParameters,
+    getProvides: getProvides,
+    getValues: getValues,
+
     // Allows fetching based on a relative key path, e.g., "someParent.xyz".
     get: function (keyPath) {
       var keys = keyPath.split('.'), value = this;
@@ -74,26 +55,14 @@ function procedural(name, parent) {
       return value;
     },
 
-    getParameters: function () {
-      return params.map(function (param) { return param.name; });
-    },
-
-    getRandGen: function (opt_id) {
-      var seed = opt_id ? murmurhash3(opt_id, this.hash) : this.hash;
-      return new Random(seed);
-    },
-
-    getValues: function () {
-      return values.map(function (value) { return value.name; });
-    },
-
-    getName: function () {
-      return name;
-    },
-
     getParent: function () {
       if (!parent) return null;
       return this[parent.getName()];
+    },
+
+    getRandGen: function (opt_id) {
+      var seed = opt_id ? murmur3.hash32(opt_id, this.hash) : this.hash;
+      return new random.ParkMiller(seed);
     },
 
     toString: function () {
@@ -112,7 +81,7 @@ function procedural(name, parent) {
   };
 
   function create() {
-    if (arguments.length != params.length) {
+    if (arguments.length != parameterCount) {
       throw new Error('Wrong number of parameters for ' + create + ': ' + arguments.length);
     }
 
@@ -126,46 +95,74 @@ function procedural(name, parent) {
 
     // We assume that this function is bound to the parent instance. Example:
     // jupiter.moon(13) -- "moon" is this function, bound to "jupiter".
-    var parentInstance = this.getName ? this : null;
+    var parentInstance = parent && parent.isInstance(this) ? this : null;
 
     // Create the instance which will hold all the values.
     var instance = new ProceduralInstance(parentInstance);
 
-    // Start setting up an array of all hash parameter pieces.
-    var hashParams = [name];
-
-    // Map all the arguments to the registered parameters.
-    for (var i = 0; i < params.length; i++) {
-      var param = params[i], value = arguments[i];
-
-      // Validate the value.
-      if (param.validator && !param.validator(instance, value)) {
-        throw new Error('Invalid value for ' + name + '.' + param.name + ': ' + value);
-      }
-
-      instance[param.name] = value;
-      // TODO: Performance check for JSON.stringify, maybe toString is enough.
-      hashParams.push(JSON.stringify(instance[param.name]));
+    // Start setting up an array of all values that make up the hash.
+    var hashParts = [name], hashSeed = parentInstance ? parentInstance.hash : 0;
+    function createHashOnce() {
+      if ('hash' in instance) return;
+      // Calculate the hash for the instance based on parents and parameters.
+      instance.hash = murmur3.hash32(hashParts.join('\x00'), hashSeed);
     }
 
-    // Calculate the hash for the instance based on parents and parameters.
-    // TODO: This probably needs to allow customization of hashing.
-    var hashSeed = parentInstance ? parentInstance.hash : 0;
-    instance.hash = murmurhash3(hashParams.join('\x00'), hashSeed);
-
-    // Set all the computed values on the instance.
+    // Fill in all the values specified on this procedural function.
+    var argumentIndex = 0;
     for (var i = 0; i < values.length; i++) {
-      var value = values[i];
-      instance[value.name] = value.fn ? value.fn(instance) : value.constant;
+      var value = values[i], shouldHash = doNotHash.indexOf(value.name) == -1;
+
+      if (value.type == PARAMETER) {
+        if ('hash' in instance && shouldHash) {
+          throw new Error('Cannot define hashed parameters after hash is generated');
+        }
+
+        var argument = arguments[argumentIndex++];
+
+        // Validate the value.
+        if (value.validator && !value.validator(instance, argument)) {
+          throw new Error('Invalid value for ' + name + '.' + value.name + ': ' + argument);
+        }
+
+        // Assign the argument value to the instance.
+        instance[value.name] = argument;
+
+        if (shouldHash) {
+          // TODO: Performance check for JSON.stringify, maybe toString is enough.
+          hashParts.push(JSON.stringify(instance[value.name]));
+        }
+      } else if (value.type == COMPUTED) {
+        // Compute and assign the value to the instance.
+        if (value.fn) {
+          // Always create the hash before computing values which may need it.
+          createHashOnce();
+          instance[value.name] = value.fn(instance);
+        } else {
+          instance[value.name] = value.constant;
+        }
+      }
     }
+
+    // Create the hash now if it wasn't created above.
+    createHashOnce();
 
     // Prevent the instance from changing before exposing it.
     Object.freeze(instance);
     return instance;
   }
 
+  create.getName = getName;
+  create.getParameters = getParameters;
+  create.getProvides = getProvides;
+  create.getValues = getValues;
+
   create.done = function () {
     return parent;
+  };
+
+  create.doNotHash = function (var_args) {
+    Array.prototype.push.apply(doNotHash, arguments);
   };
 
   create.generates = function (nameValue) {
@@ -182,12 +179,12 @@ function procedural(name, parent) {
     return proc;
   };
 
-  create.getName = function () {
-    return name;
-  };
-
   create.getParent = function () {
     return parent;
+  };
+
+  create.isInstance = function (obj) {
+    return obj instanceof ProceduralInstance;
   };
 
   create.provides = function (name, fnOrConstant) {
@@ -197,13 +194,18 @@ function procedural(name, parent) {
     }
     */
 
-    var value = {name: name};
+    if (name in valuesMap) {
+      throw new Error('A value named ' + name + ' is already defined');
+    }
+
+    var value = {name: name, type: COMPUTED};
     if (typeof fnOrConstant == 'function') {
       value.fn = fnOrConstant;
     } else {
       value.constant = fnOrConstant;
     }
     values.push(value);
+    valuesMap[name] = value;
 
     return this;
   };
@@ -215,9 +217,10 @@ function procedural(name, parent) {
     }
     */
 
+    // The last argument may be a validation function.
     var numParams = arguments.length, validator;
     if (typeof arguments[numParams - 1] == 'function') {
-      validator = numParams--;
+      validator = arguments[numParams--];
     }
 
     if (!numParams) {
@@ -226,15 +229,25 @@ function procedural(name, parent) {
 
     for (var i = 0; i < numParams; i++) {
       var name = arguments[i];
+
       if (typeof name != 'string') {
         throw new Error('Invalid parameter name ' + name);
       }
-      var param = {name: name};
+
+      if (name in valuesMap) {
+        throw new Error('A value named ' + name + ' is already defined');
+      }
+
+      var param = {name: name, type: PARAMETER};
       if (typeof validator == 'function') {
         param.validator = validator;
       }
-      params.push(param);
+      values.push(param);
+      valuesMap[name] = param;
     }
+
+    // Keep track of number of parameters for the constructor validation.
+    parameterCount += numParams;
 
     return this;
   };
@@ -246,12 +259,9 @@ function procedural(name, parent) {
       proc = proc.getParent();
     }
 
-    var names = params.map(function (param) { return param.name; }).join(', ');
+    var names = this.getParameters().join(', ');
     return pieces.join('.') + '(' + names + ')';
   };
 
   return create;
-}
-
-// TODO: Don't support direct use from <script> tags.
-if (window.module) module.exports = procedural;
+};

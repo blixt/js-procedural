@@ -116,8 +116,11 @@ How to define a procedurally generated avatar.
 
 ```javascript
 var avatar = procedural('avatar')
+  // The block size is just visual, so it shouldn't affect randomization.
+  .doNotHash('blockSize')
+  // The username is needed to create a unique avatar for every user.
   .takes('username')
-  // Size, in blocks.
+  // Size, in blocks. Different sizes will create different avatars.
   .takes('size', function validate(avatar, blocks) {
     // Ensure that size is a positive integer divisible by 2.
     return typeof blocks == 'number' && blocks > 0 && !(blocks % 2);
