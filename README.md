@@ -73,7 +73,7 @@ Let's find out what temperature we've got at (0, 0).
 console.log('Temperature is:', earth.region(0, 0).temperature);
 ```
 
-Note that every instance automatically gets its own set of random values:
+Note that generated random numbers will be different for different parameters:
 
 ```javascript
 var kryptonTemp = world('Krypton').region(0, 0).temperature;
