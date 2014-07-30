@@ -32,7 +32,7 @@ var procedural = require('procedural');
 var world = procedural('world').takes('name');
 ```
 
-You may want the world to define if it's habitable:
+You may want a world to define if it's habitable:
 
 ```javascript
 world.provides('habitable', function (world) {
@@ -49,7 +49,7 @@ console.log('Does', earth.name, 'support life?');
 console.log(earth.habitable ? 'Yes' : 'No');
 ```
 
-Now it makes sense for a region in the world to be accessible...
+Now it makes sense for a region in a world to be accessible...
 
 ```javascript
 var region = world.generates('region')
@@ -91,13 +91,13 @@ world.provides('habitable', function (world) {
 ```
 
 If you rerun all the code together now, you'll see that Krypton will be a bit
-hotter than before, while Earth is more comfortable.
+hotter than before, while Earth is still comfortable.
 
 I hope this example shows how useful it is to have a set of procedurally
 generated values that depend on each other when you want to create random
 content that still follows a set of rules.
 
-For another example, see the bottom of this README, or go checkout one of
+For another example, see the bottom of this README, or go check out one of
 these demos:
 
 * TODO: The space demo.
