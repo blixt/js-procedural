@@ -163,6 +163,7 @@ module.exports = function procedural(name, parent) {
 
   create.doNotHash = function (var_args) {
     Array.prototype.push.apply(doNotHash, arguments);
+    return this;
   };
 
   create.generates = function (nameValue) {

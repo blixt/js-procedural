@@ -115,6 +115,8 @@ Full example
 How to define a procedurally generated avatar.
 
 ```javascript
+var procedural = require('procedural');
+
 var avatar = procedural('avatar')
   // The block size is just visual, so it shouldn't affect randomization.
   .doNotHash('blockSize')
