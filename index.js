@@ -4,6 +4,31 @@ var random = require('./lib/random');
 // Poor man's enum.
 var PARAMETER = {}, COMPUTED = {};
 
+// Allows fetching based on a relative key path, e.g., "someParent.xyz". For
+// traversing up the tree, "..parentValue" and "...grandParentValue" also
+// works, as well as "/rootValue".
+function instanceGet(keyPath) {
+  var value = this;
+  // Make key path relative to root node if first character is "/".
+  if (keyPath[0] == '/') {
+    var parent;
+    while (parent = value.getParent()) value = parent;
+    keyPath = keyPath.substr(1);
+  }
+  var keys = keyPath.split('.');
+
+  // Remove first empty argument to make ".bla" refer to current instance.
+  if (!keys[0]) {
+    keys.shift();
+  }
+
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    value = key ? value[key] : value.getParent();
+  }
+  return value;
+}
+
 module.exports = function procedural(name, parent) {
   var values = [], valuesMap = {hash: null};
   var doNotHash = [];
@@ -46,19 +71,11 @@ module.exports = function procedural(name, parent) {
   }
 
   ProceduralInstance.prototype = {
+    get: instanceGet,
     getName: getName,
     getParameters: getParameters,
     getProvides: getProvides,
     getValues: getValues,
-
-    // Allows fetching based on a relative key path, e.g., "someParent.xyz".
-    get: function (keyPath) {
-      var keys = keyPath.split('.'), value = this;
-      for (var i = 0; i < keys.length; i++) {
-        value = value[keys[i]];
-      }
-      return value;
-    },
 
     getParent: function () {
       if (!parent) return null;
