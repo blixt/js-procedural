@@ -9,6 +9,11 @@ module.exports = function procedural(name, parent) {
   var doNotHash = [];
   var parameterCount = 0;
 
+  // Prevent defining values with the same name as the parent.
+  if (parent) {
+    valuesMap[parent.getName()] = null;
+  }
+
   // Utility functions that can be passed for use outside this function.
   function getName() {
     return name;
@@ -201,6 +206,10 @@ module.exports = function procedural(name, parent) {
       throw new Error('A value named ' + name + ' is already defined');
     }
 
+    if (name in ProceduralInstance.prototype) {
+      throw new Error('Invalid value name "' + name + '"');
+    }
+
     var value = {name: name, type: COMPUTED};
     if (typeof fnOrConstant == 'function') {
       value.fn = fnOrConstant;
@@ -239,6 +248,10 @@ module.exports = function procedural(name, parent) {
 
       if (name in valuesMap) {
         throw new Error('A value named ' + name + ' is already defined');
+      }
+
+      if (name in ProceduralInstance.prototype) {
+        throw new Error('Invalid parameter name "' + name + '"');
       }
 
       var param = {name: name, type: PARAMETER};
