@@ -61,8 +61,10 @@ module.exports = function procedural(name, parent) {
     },
 
     getRandGen: function (opt_id) {
-      var seed = opt_id ? murmur3.hash32(opt_id, this.hash) : this.hash;
-      return new random.ParkMiller(seed);
+      var p = this.getParent(),
+          s0 = murmur3.hash32(opt_id || 'default', this.hash) * 2.3283064365386963e-10,
+          s1 = this.hash * 2.3283064365386963e-10;
+      return random(s0, s1);
     },
 
     toString: function () {
