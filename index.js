@@ -252,9 +252,10 @@ module.exports = function procedural(name, parent) {
       throw new Error('Invalid method name "' + name + '"');
     }
 
-    ProceduralInstance.prototype[name] = function wrapper() {
+    valuesMap[name] = function wrapper() {
       return fn.apply(this, Array.prototype.concat.apply([this], arguments));
     };
+    ProceduralInstance.prototype[name] = valuesMap[name];
 
     return this;
   };
