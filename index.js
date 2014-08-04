@@ -239,6 +239,26 @@ module.exports = function procedural(name, parent) {
     return this;
   };
 
+  create.providesMethod = function (name, fn) {
+    if (typeof fn != 'function') {
+      throw new Error('Method must be passed in as a function');
+    }
+
+    if (name in valuesMap) {
+      throw new Error('A value named ' + name + ' is already defined');
+    }
+
+    if (name in ProceduralInstance.prototype) {
+      throw new Error('Invalid method name "' + name + '"');
+    }
+
+    ProceduralInstance.prototype[name] = function wrapper() {
+      return fn.apply(this, Array.prototype.concat.apply([this], arguments));
+    };
+
+    return this;
+  };
+
   create.takes = function (var_args) {
     /*
     if (Object.isFrozen(create)) {
